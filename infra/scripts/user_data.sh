@@ -85,7 +85,7 @@ echo "ssh-add /home/ubuntu/.ssh/dataproc_key" >> /home/ubuntu/.bashrc
 # Устанавливаем дополнительные полезные инструменты
 log "Installing additional tools"
 apt-get update
-apt-get install -y tmux htop iotop
+apt-get install -y tmux htop iotop ansible
 
 # Устанавливаем s3cmd
 log "Installing s3cmd"
