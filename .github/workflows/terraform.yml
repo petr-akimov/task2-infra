@@ -1,7 +1,7 @@
 name: Terraform Infrastructure Pipeline
 
 on:
-  workflow_dispatch:  # Ручной запуск, аналогично when: manual
+  workflow_dispatch:
 
 env:
   TF_VAR_yc_folder_id: ${{ secrets.YC_FOLDER_ID }}
@@ -26,7 +26,20 @@ jobs:
       
     - name: Configure Terraform CLI
       run: |
-        echo "${{ secrets.TERRAFORM_RC }}" > ~/.terraformrc
+        mkdir -p ~/.terraform.d
+        cat > ~/.terraformrc << 'EOF'
+        provider_installation {
+          network_mirror {
+            url = "https://terraform-mirror.yandexcloud.net/"
+            include = ["registry.terraform.io/*/*"]
+          }
+          direct {
+            exclude = ["registry.terraform.io/*/*"]
+          }
+        }
+        EOF
+        echo "Generated .terraformrc:"
+        cat ~/.terraformrc
         
     - name: Setup SSH keys
       run: |
@@ -65,13 +78,13 @@ jobs:
         path: |
           infra/terraform.tfstate
           infra/.terraform.lock.hcl
-        retention-days: 1  # Аналог expire_in: 1h
+        retention-days: 1
 
   cleanup:
     name: Destroy Infrastructure
     runs-on: ubuntu-latest
     environment: production
-    needs: infra  # Аналог needs: ["infra"]
+    needs: infra
     
     steps:
     - name: Checkout code
@@ -84,7 +97,18 @@ jobs:
       
     - name: Configure Terraform CLI
       run: |
-        echo "${{ secrets.TERRAFORM_RC }}" > ~/.terraformrc
+        mkdir -p ~/.terraform.d
+        cat > ~/.terraformrc << 'EOF'
+        provider_installation {
+          network_mirror {
+            url = "https://terraform-mirror.yandexcloud.net/"
+            include = ["registry.terraform.io/*/*"]
+          }
+          direct {
+            exclude = ["registry.terraform.io/*/*"]
+          }
+        }
+        EOF
         
     - name: Setup SSH keys
       run: |
@@ -120,4 +144,3 @@ jobs:
     - name: Terraform Destroy
       working-directory: infra
       run: terraform destroy -auto-approve
-      
