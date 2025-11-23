@@ -1,0 +1,123 @@
+name: Terraform Infrastructure Pipeline
+
+on:
+  workflow_dispatch:  # Ручной запуск, аналогично when: manual
+
+env:
+  TF_VAR_yc_folder_id: ${{ secrets.YC_FOLDER_ID }}
+  TF_VAR_yc_cloud_id: ${{ secrets.YC_CLOUD_ID }}
+  TF_VAR_yc_token: ${{ secrets.YC_TOKEN }}
+  TF_VAR_yc_zone: "ru-central1-a"
+
+jobs:
+  infra:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6
+      
+    - name: Configure Terraform CLI
+      run: |
+        echo "${{ secrets.TERRAFORM_RC }}" > ~/.terraformrc
+        
+    - name: Setup SSH keys
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.YC_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        echo "${{ secrets.YC_PUBLIC_KEY }}" > ~/.ssh/id_rsa.pub
+        chmod 600 ~/.ssh/id_rsa
+        chmod 644 ~/.ssh/id_rsa.pub
+        
+    - name: Cache Terraform providers
+      uses: actions/cache@v3
+      with:
+        path: |
+          infra/.terraform
+          infra/.terraform.lock.hcl
+        key: terraform-providers-${{ hashFiles('infra/**/*.tf') }}
+        restore-keys: |
+          terraform-providers-
+          
+    - name: Terraform Init
+      working-directory: infra
+      run: terraform init
+      
+    - name: Terraform Validate
+      working-directory: infra
+      run: terraform validate
+      
+    - name: Terraform Apply
+      working-directory: infra
+      run: terraform apply -auto-approve
+      
+    - name: Upload Terraform state artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: terraform-state
+        path: |
+          infra/terraform.tfstate
+          infra/.terraform.lock.hcl
+        retention-days: 1  # Аналог expire_in: 1h
+
+  cleanup:
+    name: Destroy Infrastructure
+    runs-on: ubuntu-latest
+    environment: production
+    needs: infra  # Аналог needs: ["infra"]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6
+      
+    - name: Configure Terraform CLI
+      run: |
+        echo "${{ secrets.TERRAFORM_RC }}" > ~/.terraformrc
+        
+    - name: Setup SSH keys
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.YC_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        echo "${{ secrets.YC_PUBLIC_KEY }}" > ~/.ssh/id_rsa.pub
+        chmod 600 ~/.ssh/id_rsa
+        chmod 644 ~/.ssh/id_rsa.pub
+        
+    - name: Download Terraform state artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: terraform-state
+        
+    - name: Cache Terraform providers
+      uses: actions/cache@v3
+      with:
+        path: |
+          infra/.terraform
+          infra/.terraform.lock.hcl
+        key: terraform-providers-${{ hashFiles('infra/**/*.tf') }}
+        restore-keys: |
+          terraform-providers-
+          
+    - name: Terraform Init
+      working-directory: infra
+      run: terraform init -upgrade=false
+      
+    - name: Terraform Show
+      working-directory: infra
+      run: terraform show
+      
+    - name: Terraform Destroy
+      working-directory: infra
+      run: terraform destroy -auto-approve
+      
